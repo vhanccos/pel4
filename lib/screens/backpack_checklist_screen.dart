@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/emergency_models.dart';
+import '../services/local_storage_service.dart';
 import '../theme/app_theme.dart';
 
 class BackpackChecklistScreen extends StatefulWidget {
@@ -10,11 +11,10 @@ class BackpackChecklistScreen extends StatefulWidget {
 }
 
 class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
-  SupplyCategory? _selectedCategory; // null = Todas las categorías
+  SupplyCategory? _selectedCategory;
   bool _filterOnlyPending = false;
 
-  final List<BackpackItem> _items = [
-    // Vitales
+  List<BackpackItem> _items = [
     BackpackItem(
       id: 'v1',
       title: 'Agua embotellada (4L)',
@@ -23,6 +23,7 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
       category: SupplyCategory.vitales,
       icon: Icons.water_drop,
       isPacked: true,
+      expiryDate: '2026-12-15',
     ),
     BackpackItem(
       id: 'v2',
@@ -32,6 +33,7 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
       category: SupplyCategory.vitales,
       icon: Icons.lunch_dining,
       isPacked: true,
+      expiryDate: '2027-05-20',
     ),
     BackpackItem(
       id: 'v3',
@@ -51,8 +53,6 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
       icon: Icons.bed_outlined,
       isPacked: true,
     ),
-
-    // Botiquín
     BackpackItem(
       id: 'b1',
       title: 'Alcohol etílico al 70%',
@@ -89,8 +89,6 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
       icon: Icons.masks,
       isPacked: true,
     ),
-
-    // Herramientas y Equipos
     BackpackItem(
       id: 'h1',
       title: 'Radio a pilas AM/FM + repuestos',
@@ -127,8 +125,6 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
       icon: Icons.volume_up,
       isPacked: true,
     ),
-
-    // Documentos y Dinero
     BackpackItem(
       id: 'd1',
       title: 'Copias de DNI y pólizas de seguro',
@@ -158,6 +154,23 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
     ),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedBackpack();
+  }
+
+  Future<void> _loadSavedBackpack() async {
+    final saved = await LocalStorageService.loadBackpack();
+    if (saved != null && saved.isNotEmpty) {
+      setState(() => _items = saved);
+    }
+  }
+
+  Future<void> _saveBackpack() async {
+    await LocalStorageService.saveBackpack(_items);
+  }
+
   void _toggleItemStatus(String id) {
     setState(() {
       final index = _items.indexWhere((element) => element.id == id);
@@ -165,12 +178,22 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
         _items[index].isPacked = !_items[index].isPacked;
       }
     });
+    _saveBackpack();
   }
 
-  void _addNewCustomItem() {
-    final titleController = TextEditingController();
-    final qtyController = TextEditingController();
-    SupplyCategory selectedCategory = SupplyCategory.vitales;
+  void _deleteItem(String id) {
+    setState(() {
+      _items.removeWhere((i) => i.id == id);
+    });
+    _saveBackpack();
+  }
+
+  void _openItemModal({BackpackItem? itemToEdit}) {
+    final titleController = TextEditingController(text: itemToEdit?.title ?? '');
+    final subtitleController = TextEditingController(text: itemToEdit?.subtitle ?? '');
+    final qtyController = TextEditingController(text: itemToEdit?.quantity ?? '');
+    final expiryController = TextEditingController(text: itemToEdit?.expiryDate ?? '');
+    SupplyCategory selectedCategory = itemToEdit?.category ?? SupplyCategory.vitales;
 
     showModalBottomSheet(
       context: context,
@@ -194,9 +217,9 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Añadir a la Mochila',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                    Text(
+                      itemToEdit == null ? 'Añadir a la Mochila' : 'Editar Artículo',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close),
@@ -215,19 +238,42 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: qtyController,
+                  controller: subtitleController,
                   decoration: const InputDecoration(
-                    labelText: 'Cantidad o Especificación',
-                    hintText: 'Ej. 1 blíster x 10 pastillas',
+                    labelText: 'Descripción / Ubicación',
+                    hintText: 'Ej. Bolsillo lateral derecho',
                     border: OutlineInputBorder(),
                   ),
                 ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Categoría:',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: qtyController,
+                        decoration: const InputDecoration(
+                          labelText: 'Cantidad',
+                          hintText: 'Ej. 2 unidades',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: expiryController,
+                        decoration: const InputDecoration(
+                          labelText: 'Vencimiento (opcional)',
+                          hintText: 'YYYY-MM-DD',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 14),
+                const Text('Categoría:', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                const SizedBox(height: 6),
                 Wrap(
                   spacing: 8,
                   children: SupplyCategory.values.map((cat) {
@@ -242,7 +288,7 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
                     );
                   }).toList(),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 18),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryBlue,
@@ -250,26 +296,44 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   onPressed: () {
-                    if (titleController.text.trim().isNotEmpty) {
+                    final title = titleController.text.trim();
+                    if (title.isNotEmpty) {
                       setState(() {
-                        _items.add(
-                          BackpackItem(
-                            id: 'c_${DateTime.now().millisecondsSinceEpoch}',
-                            title: titleController.text.trim(),
-                            subtitle: 'Artículo personalizado agregado',
-                            quantity: qtyController.text.trim().isNotEmpty
-                                ? qtyController.text.trim()
-                                : '1 unidad',
-                            category: selectedCategory,
-                            icon: selectedCategory.icon,
-                            isPacked: false,
-                          ),
-                        );
+                        if (itemToEdit == null) {
+                          _items.add(
+                            BackpackItem(
+                              id: 'c_${DateTime.now().millisecondsSinceEpoch}',
+                              title: title,
+                              subtitle: subtitleController.text.trim().isNotEmpty
+                                  ? subtitleController.text.trim()
+                                  : 'Suministro personal',
+                              quantity: qtyController.text.trim().isNotEmpty
+                                  ? qtyController.text.trim()
+                                  : '1 unidad',
+                              category: selectedCategory,
+                              icon: selectedCategory.icon,
+                              isPacked: false,
+                              expiryDate: expiryController.text.trim().isNotEmpty
+                                  ? expiryController.text.trim()
+                                  : null,
+                            ),
+                          );
+                        } else {
+                          itemToEdit.title = title;
+                          itemToEdit.subtitle = subtitleController.text.trim();
+                          itemToEdit.quantity = qtyController.text.trim();
+                          itemToEdit.category = selectedCategory;
+                          itemToEdit.icon = selectedCategory.icon;
+                          itemToEdit.expiryDate = expiryController.text.trim().isNotEmpty
+                              ? expiryController.text.trim()
+                              : null;
+                        }
                       });
+                      _saveBackpack();
                       Navigator.pop(ctx);
                     }
                   },
-                  child: const Text('Guardar Artículo'),
+                  child: Text(itemToEdit == null ? 'Guardar Artículo' : 'Actualizar Artículo'),
                 ),
               ],
             ),
@@ -285,7 +349,6 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
     final totalCount = _items.length;
     final progressPercentage = totalCount > 0 ? (packedCount / totalCount) : 0.0;
 
-    // Filter items
     final filteredItems = _items.where((item) {
       if (_selectedCategory != null && item.category != _selectedCategory) {
         return false;
@@ -296,10 +359,9 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
       return true;
     }).toList();
 
-    // Demonstrated use of CustomScrollView with SliverAppBar, SliverList.separated, and Wrap
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _addNewCustomItem,
+        onPressed: () => _openItemModal(),
         backgroundColor: AppTheme.primaryBlue,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
@@ -307,7 +369,6 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
       ),
       body: CustomScrollView(
         slivers: [
-          // SliverAppBar expandible con indicador de porcentaje
           SliverAppBar(
             expandedHeight: 180.0,
             floating: false,
@@ -317,11 +378,7 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
             flexibleSpace: FlexibleSpaceBar(
               title: const Text(
                 'Mochila Sísmica INDECI',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 16,
-                  color: Colors.white,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Colors.white),
               ),
               background: Container(
                 decoration: const BoxDecoration(
@@ -340,29 +397,18 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const Text(
-                            'Primeras 48 Horas',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            'Primeras 48 Horas (Offline)',
+                            style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             '${(progressPercentage * 100).toInt()}% Lista',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w900,
-                            ),
+                            style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             '$packedCount de $totalCount artículos listos',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
+                            style: const TextStyle(color: Colors.white70, fontSize: 12),
                           ),
                         ],
                       ),
@@ -378,19 +424,13 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
                             strokeWidth: 7,
                             backgroundColor: Colors.white24,
                             valueColor: AlwaysStoppedAnimation<Color>(
-                              progressPercentage >= 0.8
-                                  ? const Color(0xFF5FFFA6)
-                                  : AppTheme.alertAmber,
+                              progressPercentage >= 0.8 ? const Color(0xFF5FFFA6) : AppTheme.alertAmber,
                             ),
                           ),
                         ),
                         Text(
                           '$packedCount/$totalCount',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14,
-                          ),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14),
                         ),
                       ],
                     ),
@@ -399,15 +439,12 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
               ),
             ),
           ),
-
-          // SliverToBoxAdapter: Filtros con Wrap (Requerimiento evaluado del LAB 04)
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Alerta de vencimiento
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
@@ -433,15 +470,9 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
-
-                  // Filtro por categoría utilizando Wrap (Flow flexible)
                   const Text(
                     'Filtros por Categoría (Wrap Layout):',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
-                    ),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
                   ),
                   const SizedBox(height: 8),
                   Wrap(
@@ -491,8 +522,6 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
               ),
             ),
           ),
-
-          // Requerimiento explícito: SliverList.separated
           if (filteredItems.isEmpty)
             const SliverToBoxAdapter(
               child: Padding(
@@ -505,10 +534,7 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
                       Text(
                         '¡Todos los artículos de esta vista están empacados!',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.textSecondary,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.w700, color: AppTheme.textSecondary),
                       ),
                     ],
                   ),
@@ -525,7 +551,7 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
                   final item = filteredItems[index];
 
                   return Container(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: item.isPacked ? const Color(0xFFF9FAFD) : Colors.white,
                       borderRadius: BorderRadius.circular(14),
@@ -538,20 +564,14 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Checkbox interactivo
                         Checkbox(
                           value: item.isPacked,
                           activeColor: AppTheme.successGreen,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(5),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
                           onChanged: (_) => _toggleItemStatus(item.id),
                         ),
-                        const SizedBox(width: 8),
-
-                        // Icono categorizado
                         Container(
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
                             color: item.isPacked
                                 ? Colors.black.withValues(alpha: 0.05)
@@ -561,12 +581,10 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
                           child: Icon(
                             item.icon,
                             color: item.isPacked ? Colors.grey : AppTheme.primaryBlue,
-                            size: 22,
+                            size: 20,
                           ),
                         ),
-                        const SizedBox(width: 14),
-
-                        // Información del artículo usando Expanded y Column
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -579,22 +597,15 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
                                       style: TextStyle(
                                         fontWeight: FontWeight.w800,
                                         fontSize: 14,
-                                        decoration: item.isPacked
-                                            ? TextDecoration.lineThrough
-                                            : null,
-                                        color: item.isPacked
-                                            ? Colors.grey
-                                            : AppTheme.textPrimary,
+                                        decoration: item.isPacked ? TextDecoration.lineThrough : null,
+                                        color: item.isPacked ? Colors.grey : AppTheme.textPrimary,
                                       ),
                                     ),
                                   ),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: item.isPacked
-                                          ? AppTheme.successSoftGreen
-                                          : AppTheme.emergencySoftRed,
+                                      color: item.isPacked ? AppTheme.successSoftGreen : AppTheme.emergencySoftRed,
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
@@ -602,27 +613,21 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
                                       style: TextStyle(
                                         fontSize: 10,
                                         fontWeight: FontWeight.w700,
-                                        color: item.isPacked
-                                            ? AppTheme.successGreen
-                                            : AppTheme.emergencyDarkRed,
+                                        color: item.isPacked ? AppTheme.successGreen : AppTheme.emergencyDarkRed,
                                       ),
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 3),
+                              const SizedBox(height: 2),
                               Text(
                                 item.subtitle,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppTheme.textSecondary,
-                                ),
+                                style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 3),
                               Row(
                                 children: [
-                                  const Icon(Icons.inventory_2_outlined,
-                                      size: 13, color: AppTheme.primaryBlue),
+                                  const Icon(Icons.inventory_2_outlined, size: 12, color: AppTheme.primaryBlue),
                                   const SizedBox(width: 4),
                                   Text(
                                     item.quantity,
@@ -632,10 +637,27 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
                                       color: AppTheme.primaryBlue,
                                     ),
                                   ),
+                                  if (item.expiryDate != null) ...[
+                                    const SizedBox(width: 10),
+                                    const Icon(Icons.calendar_today, size: 11, color: Colors.orange),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      'Vence: ${item.expiryDate}',
+                                      style: const TextStyle(fontSize: 10, color: Colors.orange, fontWeight: FontWeight.w700),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ],
                           ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 18, color: AppTheme.primaryBlue),
+                          onPressed: () => _openItemModal(itemToEdit: item),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 18, color: Colors.grey),
+                          onPressed: () => _deleteItem(item.id),
                         ),
                       ],
                     ),
@@ -643,7 +665,6 @@ class _BackpackChecklistScreenState extends State<BackpackChecklistScreen> {
                 },
               ),
             ),
-
           const SliverToBoxAdapter(
             child: SizedBox(height: 90),
           ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/emergency_models.dart';
+import '../services/local_storage_service.dart';
 import '../theme/app_theme.dart';
 
 class EmergencyDirectoryScreen extends StatefulWidget {
@@ -64,6 +65,23 @@ class _EmergencyDirectoryScreenState extends State<EmergencyDirectoryScreen> {
     },
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedMedicalNote();
+  }
+
+  Future<void> _loadSavedMedicalNote() async {
+    final note = await LocalStorageService.loadMedicalNote();
+    if (note != null && note.isNotEmpty) {
+      _noteController.text = note;
+    }
+  }
+
+  void _onNoteChanged(String value) {
+    LocalStorageService.saveMedicalNote(value);
+  }
+
   void _copyToClipboard(String number, String title) {
     Clipboard.setData(ClipboardData(text: number));
     ScaffoldMessenger.of(context).showSnackBar(
@@ -125,7 +143,6 @@ class _EmergencyDirectoryScreenState extends State<EmergencyDirectoryScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                // Encabezado Superior
                 Padding(
                   padding: EdgeInsets.symmetric(
                     horizontal: isExpanded ? 32.0 : 16.0,
@@ -178,8 +195,6 @@ class _EmergencyDirectoryScreenState extends State<EmergencyDirectoryScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-
-                      // Segmented Controller (Row + Expanded)
                       Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
@@ -210,8 +225,6 @@ class _EmergencyDirectoryScreenState extends State<EmergencyDirectoryScreen> {
                     ],
                   ),
                 ),
-
-                // Contenido principal de la lista
                 Expanded(
                   child: _selectedTab == 0
                       ? _buildFamilyTab(isExpanded)
@@ -280,7 +293,6 @@ class _EmergencyDirectoryScreenState extends State<EmergencyDirectoryScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Contacto Seguro fuera de zona sísmica
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -381,8 +393,6 @@ class _EmergencyDirectoryScreenState extends State<EmergencyDirectoryScreen> {
             ),
           ),
           const SizedBox(height: 16),
-
-          // Protocolo Oficial del 119
           Card(
             color: AppTheme.softBlueBackground,
             child: Padding(
@@ -424,21 +434,32 @@ class _EmergencyDirectoryScreenState extends State<EmergencyDirectoryScreen> {
             ),
           ),
           const SizedBox(height: 16),
-
-          // Nota médica y familiar offline
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Nota Familiar y Médica (Guardada en Dispositivo)',
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Nota Familiar y Médica (Offline)',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                      ),
+                      Row(
+                        children: [
+                          Icon(Icons.check_circle, size: 14, color: AppTheme.successGreen),
+                          SizedBox(width: 4),
+                          Text('Auto-guardado', style: TextStyle(fontSize: 11, color: AppTheme.successGreen, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _noteController,
+                    onChanged: _onNoteChanged,
                     maxLines: 4,
                     decoration: InputDecoration(
                       filled: true,
@@ -448,17 +469,6 @@ class _EmergencyDirectoryScreenState extends State<EmergencyDirectoryScreen> {
                         borderSide: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Row(
-                    children: [
-                      Icon(Icons.save_outlined, size: 14, color: AppTheme.successGreen),
-                      SizedBox(width: 4),
-                      Text(
-                        'Disponible offline ante cortes de energía',
-                        style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
-                      ),
-                    ],
                   ),
                 ],
               ),
@@ -528,14 +538,13 @@ class _EmergencyDirectoryScreenState extends State<EmergencyDirectoryScreen> {
     );
   }
 
-  // Requerimiento explícito: ListView.separated para directorio de auxilio
   Widget _buildNationalContactsList(bool isExpanded) {
     return ListView.separated(
       padding: EdgeInsets.symmetric(
         horizontal: isExpanded ? 32.0 : 16.0,
         vertical: 8.0,
       ),
-      itemCount: _nationalContacts.length + 1, // +1 for the additional helplines card
+      itemCount: _nationalContacts.length + 1,
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         if (index < _nationalContacts.length) {
@@ -551,7 +560,6 @@ class _EmergencyDirectoryScreenState extends State<EmergencyDirectoryScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Número destacado con badge temático
                 Container(
                   width: 54,
                   height: 54,
@@ -571,8 +579,6 @@ class _EmergencyDirectoryScreenState extends State<EmergencyDirectoryScreen> {
                   ),
                 ),
                 const SizedBox(width: 14),
-
-                // Información central usando Expanded y Column
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -618,8 +624,6 @@ class _EmergencyDirectoryScreenState extends State<EmergencyDirectoryScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-
-                // Botones rápidos de Copia y Marcado
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -647,7 +651,6 @@ class _EmergencyDirectoryScreenState extends State<EmergencyDirectoryScreen> {
           );
         }
 
-        // Additional Helplines Footer Card
         return Card(
           color: AppTheme.softBlueBackground,
           margin: const EdgeInsets.only(top: 8, bottom: 32),
